@@ -18,33 +18,43 @@ width = "700" height = "300"
 alt="1" align=center />
 </div>
 
+
 <div  align="center">    
 <img src="./imgs/Table2.png" 
 width = "700" height = "300" 
 alt="1" align=center />
 </div>
 
+
 <div  align="center">    
 <img src="./imgs/result_visual.png" 
 width = "700" height = "300" 
 alt="1" align=center />
 </div>
+
 ## Requirements
-```bash
-pip install -r requirements.txt 
-```
+- Pytorch 1.11.0
+- Python 3.8
+- CUDA 11.3
 
 ## Data Preparation
+Please refer to [PNS+](https://github.com/GewelsJI/VPS/blob/main/docs/DATA_DESCRIPTION.md) to get access to the SUN-SEG dataset, and download it to path `./datasets`. The path structure should be as follows:
+```none
+  Polyp-MoE
+  ├── datasets
+  │   ├── SUN-SEG
+  │   │   ├── TestEasyDataset
+  │   │   │   ├── Seen
+  │   │   │   ├── Unseen
+  │   │   ├── TestHardDataset
+  │   │   │   ├── Seen
+  │   │   │   ├── Unseen
+  │   │   ├── TrainDataset
 
-### Datasets
-
+  ```
 
 ### Pretrained
-
-
-## Result
-
-
+Please refer to [SALI]([https://github.com/zhjohnchan/M3AE](https://github.com/Scatteredrain/SALI)) to get pvtv2, and download it to path `./pretrained`. 
 
 ## Acknowledgement
 
