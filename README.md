@@ -54,12 +54,15 @@ Please refer to [PNS+](https://github.com/GewelsJI/VPS/blob/main/docs/DATA_DESCR
   ```
 
 ### Pretrained
-Please refer to [SALI]([https://github.com/zhjohnchan/M3AE](https://github.com/Scatteredrain/SALI)) to get pvtv2, and download it to path `./pretrained`. 
+Please refer to [SALI](https://github.com/Scatteredrain/SALI) to get pvtv2, and download it to path `./pretrained`. 
+
+### Evaluating
+For fair comparison, we evaluate all methods through the toolbox `./eval` provided by [SALI](https://github.com/Scatteredrain/SALI)
 
 ## Acknowledgement
 
 Our project references the codes in the following repos. Thanks for their works and sharing.
-* [SALI]([https://github.com/zhjohnchan/M3AE](https://github.com/Scatteredrain/SALI))
+* [SALI](https://github.com/Scatteredrain/SALI)
 
 ## Contact
 
