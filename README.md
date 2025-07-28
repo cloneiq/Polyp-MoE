@@ -5,7 +5,7 @@
 Automatic video polyp segmentation plays a crucial role in the early screening and assisted diagnosis of colorectal cancer. However, endoscopic videos often exhibit motion blur, specular reflections, and structural occlusions, which severely hinder the modeling of cross-frame lesion continuity and structural completeness. To address these challenges, we propose Polyp-MoE, a novel medical video segmentation framework that integrates temporal modeling with a mixture-of-experts (MoE) mechanism. By jointly exploiting temporal consistency and structure-aware expert guidance, our framework enhances the model’s ability to perceive key lesion regions and recover complete structural information in low-quality frames. Specifically, we introduce a Temporal Consistency Guided Memory (TCGM) module that constructs dynamic spatiotemporal correspondences between the current and previous frames, effectively guiding degraded frames to focus on critical lesion areas and facilitating robust temporal modeling. In addition, we are the first to extend the MoE paradigm to medical video segmentation and propose a Structural Prior Mixture of Experts (SPMoE) module. This module comprises three learnable expert branches that respectively encode positional, scale, and boundary priors, and employs a lightweight prior-aware router to adaptively aggregate expert outputs for comprehensive structural completion. Extensive experiments on the SUN-SEG dataset demonstrate that our method consistently outperforms state-of-the-art approaches across all test scenarios, achieving notable Dice improvements of 2.4% and 2.7% on the challenging Seen-Hard and Unseen-Hard subsets, respectively, thereby validating its effectiveness in both temporal modeling and structural recovery.
 
 <div  align="center">    
-<img src="./imgs/overview.png" 
+<img src="./imgs/Overview.png" 
 width = "700" height = "300" 
 alt="1" align=center />
 </div>
@@ -57,7 +57,7 @@ Please refer to [PNS+](https://github.com/GewelsJI/VPS/blob/main/docs/DATA_DESCR
 Please refer to [SALI](https://github.com/Scatteredrain/SALI) to get pvtv2, and download it to path `./pretrained`. 
 
 ### Evaluating
-For fair comparison, we evaluate all methods through the toolbox `./eval` provided by [SALI](https://github.com/Scatteredrain/SALI)
+For fair comparison, we evaluate all methods through the toolbox `./eval` provided by [SALI](https://github.com/Scatteredrain/SALI).
 
 ## Acknowledgement
 
