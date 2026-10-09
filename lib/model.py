@@ -262,17 +262,179 @@ class VideoModel(nn.Module):
 
         return out
 
-
 class ClinicalBoundaryConstrainedModule(nn.Module):
-    "Full code to be released soon"
+    """
+        可学习边界先验
+    """
+    def __init__(self, in_channels, template_size=(32, 32), num_templates=4, gamma=0.5):
+        super(ClinicalBoundaryConstrainedModule, self).__init__()
+        self.in_channels = in_channels
+        self.num_templates = num_templates
+        self.gamma = gamma
+
+        # 可学习的边界模板 (形状为 num_templates x 1 x H x W)
+        self.boundary_templates = nn.Parameter(
+            torch.randn(num_templates, 1, *template_size), requires_grad=True
+        )
+
+        # 可学习的边缘提取器 (depthwise conv)
+        self.edge_conv = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1, groups=in_channels, bias=False),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(inplace=True)
+        )
+
+        # 融合后的通道数保持一致
+        self.fuse = nn.Conv2d(in_channels, in_channels, kernel_size=1)
+
+    def forward(self, x):
+        """
+        输入: x [B, C, H, W]
+        输出: x_enhanced [B, C, H, W] - 注入边界先验后的特征图
+        """
+        B, C, H, W = x.shape
+
+        # 提取边界特征
+        edge_feat = self.edge_conv(x)  # [B, C, H, W]
+        edge_feat_reduced = torch.mean(edge_feat, dim=1, keepdim=True)  # [B, 1, H, W]
+
+        # resize boundary_templates 到输入图大小 (H, W)
+        templates_resized = F.interpolate(self.boundary_templates, size=(H, W), mode='bilinear', align_corners=False)  # [K, 1, H, W]
+
+        # 计算匹配相似度（余弦相似度）
+        sim_scores = []
+        for i in range(self.num_templates):
+            sim = F.cosine_similarity(edge_feat_reduced, templates_resized[i].unsqueeze(0), dim=1)  # [B, H, W]
+            sim_scores.append(sim.unsqueeze(1))  # [B, 1, H, W]
+
+        sim_scores = torch.cat(sim_scores, dim=1)  # [B, K, H, W]
+        attention_weights = F.softmax(sim_scores, dim=1)  # [B, K, H, W]
+
+        # 使用 attention 融合 boundary templates
+        weighted_templates = (attention_weights.unsqueeze(2) * templates_resized.unsqueeze(0)).sum(dim=1)  # [B, 1, H, W]
+
+        # 扩展通道数，与原始特征融合
+        prior_guidance = weighted_templates.repeat(1, C, 1, 1)  # [B, C, H, W]
+        prior_guidance = self.fuse(prior_guidance)
+
+        # 最终融合
+        out = x + self.gamma * prior_guidance
+        return out
 
 class SizePriorInjectionModuleV4(nn.Module):
-    "Full code to be released soon"
+    def __init__(self, in_channels, image_size=(512, 512), mean_polyp_area=0.02, gamma = 0.5):
+        """
+        :param in_channels: 输入特征图的通道数
+        :param image_size: 图像的大小 (H, W)
+        :param mean_polyp_area: 训练集所有图像中平均息肉区域占比
+        === 大小先验参数（learned_size_log） ===
+            nlnet.SizePriorInjection_l1.learned_size_log: log_value = 0.888875, exp_value = 2.432392 (像素数估计)
+            nlnet.SizePriorInjection_l2.learned_size_log: log_value = 2.238295, exp_value = 9.377330 (像素数估计)
+            nlnet.SizePriorInjection_l4.learned_size_log: log_value = 3.640097, exp_value = 38.095539 (像素数估计)
+        """
+        super(SizePriorInjectionModuleV4, self).__init__()
+        self.in_channels = in_channels
+        self.image_size = image_size
+        self.mean_polyp_area = mean_polyp_area
+        self.gamma = gamma
 
+        # 用于生成前景注意力图的注意力模块
+        self.attention = nn.Sequential(
+            nn.Conv2d(in_channels, 1, kernel_size=1),
+            nn.Sigmoid()  # 输出 [B, 1, H, W]，值越大越可能是前景
+        )
+
+        # 可学习的目标面积 (对数空间更稳定)
+        self.learned_size_log = nn.Parameter(torch.tensor(np.log(self.mean_polyp_area * image_size[0] * image_size[1])))
+
+        # 通道重标定门
+        self.gate = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, kernel_size=1),
+            nn.BatchNorm2d(in_channels),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        """
+        x: [B, C, H, W] 输入特征图
+        return: 特征图 [B, C, H, W]，加入大小先验调节
+        """
+        B, C, H, W = x.shape
+
+        # 1. 得到前景注意力估计
+        attn_map = self.attention(x)  # [B, 1, H, W]
+
+        # 2. 估计前景区域大小（软面积）
+        est_area = attn_map.sum(dim=(2, 3))  # [B, 1]
+        target_size = self.learned_size_log.exp()  # [1]
+
+        # 3. 计算偏离程度
+        size_diff = (est_area - target_size).abs() / (H * W)
+        size_diff = size_diff.view(B, 1, 1, 1)  # 用于广播
+
+        # 4. 生成通道注意力门进行特征调节
+        gate_weight = self.gate(x)  # [B, C, H, W]
+
+        # 5. 融合大小偏离感知
+        out = x * (1 - self.gamma * size_diff) + gate_weight * (self.gamma * size_diff)
+
+        return out
 
 class LocationPriorModuleV2(nn.Module):
-    "Full code to be released soon"
+    def __init__(self, in_channels, template_size=(32, 32), gamma=0.5):
+        """
+        可学习位置先验 + 通道门控机制
+        :param in_channels: 输入特征图通道数
+        :param template_size: 位置先验模板大小
+        :param gamma: 注入强度
+        """
+        super(LocationPriorModuleV2, self).__init__()
+        self.in_channels = in_channels
+        self.gamma = gamma
 
+        # 可学习的位置先验模板，初始化为偏下方的高斯（你也可以换成全 0 或 uniform）
+        init_template = self._init_gaussian(template_size)
+        self.location_template = nn.Parameter(init_template)  # shape: [1, 1, H, W]
+
+        # 映射到 C 通道
+        self.template_to_feat = nn.Sequential(
+            nn.Conv2d(1, in_channels, kernel_size=1),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(inplace=True)
+        )
+
+    def _init_gaussian(self, size):
+        """初始化高斯模板 (H, W)"""
+        H, W = size
+        y = torch.linspace(0, 1, H).view(H, 1).expand(H, W)
+        x = torch.linspace(0, 1, W).view(1, W).expand(H, W)
+        center_y = 0.6
+        center_x = 0.5
+        sigma_y = 0.2
+        sigma_x = 0.2
+        gauss = torch.exp(-((x - center_x)**2 / (2 * sigma_x**2) + (y - center_y)**2 / (2 * sigma_y**2)))
+        return gauss.unsqueeze(0).unsqueeze(0)  # shape: [1, 1, H, W]
+
+    def forward(self, x):
+        """
+        输入:
+            x: [B, C, H, W] - 特征图
+        输出:
+            out: [B, C, H, W] - 加入位置先验后的特征图
+        """
+        B, C, H, W = x.shape
+        device = x.device
+
+        # 插值至当前大小
+        location_map = F.interpolate(self.location_template, size=(H, W), mode='bilinear', align_corners=False)  # [1,1,H,W]
+        location_map = location_map.expand(B, -1, H, W).to(device)  # [B,1,H,W]
+
+        # 投影为多通道
+        prior_feat = self.template_to_feat(location_map)  # [B, C, H, W]
+
+        out = x + self.gamma * prior_feat
+
+        return out
 
 
 
