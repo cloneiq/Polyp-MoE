@@ -78,7 +78,6 @@ def randomPeper(img):
     return Image.fromarray(img)
 
 class VideoDataset(data.Dataset):
-
     def __init__(self, dataset_root, trainsize=352, batchsize=8, split='MoCA-Video-Train',max_skip=5):
         self.trainsize = trainsize
         self.image_list = []
@@ -92,16 +91,19 @@ class VideoDataset(data.Dataset):
             images = sorted(glob(osp.join(img_root,case,'*.jpg')))
             gt_list = sorted(glob(osp.join(img_root.replace('Frame','GT'),case,'*.png')))
 
+            
+            # for the first frame of this case
             ##########
             i=0
             self.extra_info += [ (case, i) ]  # scene and frame_id
-            self.gt_list    += [ [gt_list[i+1],
-                                gt_list[i]] ] 
-            self.image_list += [ [images[i+1],
-                                images[i], 
-                                images[i+1]] ]
+            self.gt_list    += [ [gt_list[i],
+                                gt_list[i]] ]
+            self.image_list += [ [images[i],
+                                images[i],
+                                images[i]] ]
             self.case_idx += [0]
             #########
+
 
             for i in range(1,len(images)-1):
                 
@@ -111,10 +113,11 @@ class VideoDataset(data.Dataset):
                 self.gt_list    += [ [gt_list[mem_idx],
                                     gt_list[i] ]]
                 self.image_list += [ [images[mem_idx],
-                                        images[i], 
-                                        images[i+1]] ]
+                                        images[i],
+                                        images[i-1]] ]
                 self.case_idx += [i]
 
+            # for the last frame of this case
             ##########
             i = len(images)-1
             mem_idx = random.randint(max(i-1-max_skip,0),i-2)
@@ -124,7 +127,6 @@ class VideoDataset(data.Dataset):
                                     images[i], 
                                     images[i-1]] ]
             self.case_idx += [i]
-            ################
 
         # transforms
         self.img_transform = transforms.Compose([
@@ -136,7 +138,6 @@ class VideoDataset(data.Dataset):
             transforms.ToTensor()])
 
     def __getitem__(self, index):
-
         imgs = []
         names= []
         gts = []
@@ -148,11 +149,11 @@ class VideoDataset(data.Dataset):
         for i in range(len(self.gt_list[index])):
             gts +=[self.binary_loader(self.gt_list[index][i])]
         #print(names)
-        scene= self.image_list[index][0].split('/')[-3]
+        scene= self.image_list[index][0].split('/')[-3]  
 
 
         imgs, gts = cv_random_flip(imgs, gts)
-
+        #imgs, gt = randomCrop(imgs, gt)
         imgs, gts = randomRotation(imgs, gts)
         imgs = colorEnhance(imgs)
 
@@ -164,7 +165,7 @@ class VideoDataset(data.Dataset):
 
         case_idx = self.case_idx[index]
 
-        return imgs, gts, case_idx
+        return imgs, gts, case_idx#, scene, names
 
     def rgb_loader(self, path):
         with open(path, 'rb') as f:
@@ -192,13 +193,12 @@ def get_loader(dataset_root, batchsize, trainsize, train_split,
     return data_loader
 
 class test_dataset:
-
     def __init__(self, dataset_root, split='TestHardDataset/Seen', testsize=352):
         self.testsize = testsize
         self.image_list = []
         self.gt_list = []
         self.extra_info = []
-        self.case_idx = []
+        self.case_idx = [] 
 
         
         img_root = dataset_root + '/{}/Frame'.format(split)
@@ -206,16 +206,16 @@ class test_dataset:
             images = sorted(glob(osp.join(img_root,case,'*.jpg')))
             gt_list = sorted(glob(osp.join(img_root.replace('Frame','GT'),case,'*.png')))
             
-            for i in range(len(images)-1):
-                # self.extra_info += [ (case, i) ]  # scene and frame_id
-                self.gt_list    += [ gt_list[i] ]   # 当前帧GT
-                self.image_list += [ [images[i],    # 当前帧，下一帧IMAGE
-                                    images[i+1]] ]
-                self.case_idx += [i]
+            # for the first frame of this case: use current frame as its neighbor
+            self.gt_list    += [ gt_list[0] ]
+            self.image_list += [ [images[0],
+                                images[0]] ]
+            self.case_idx += [0]
 
-            for i in range(len(images)-1, len(images)-2,-1): 
+            for i in range(1, len(images)):
+                # self.extra_info += [ (case, i) ]  # scene and frame_id
                 self.gt_list    += [ gt_list[i] ]
-                self.image_list += [ [images[i], 
+                self.image_list += [ [images[i],
                                 images[i-1]] ]
                 self.case_idx += [i]
 
@@ -234,6 +234,8 @@ class test_dataset:
         imgs = []
         names= []
 
+        # if 'case_M_20181010094822_0U62363101085921_1_003_001-1_a10_ayy_image0096' in self.image_list[self.index]:
+        #     print('!!!!!!!!')
         for i in range(len(self.image_list[self.index])):
             imgs += [self.rgb_loader(self.image_list[self.index][i])]           
             names+= [self.image_list[self.index][i].split('/')[-1]]
@@ -262,3 +264,4 @@ class test_dataset:
         
     def __len__(self):
         return self.size
+        
